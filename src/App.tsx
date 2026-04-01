@@ -46,6 +46,8 @@ export default function App() {
   const [coordShot, setCoordShot] = useState<GenerationState>({ loading: false, image: null });
   const [detailTexture, setDetailTexture] = useState<GenerationState>({ loading: false, image: null });
 
+  const isGenerating = cleanUpFront.loading || cleanUpBack.loading || modelFront.loading || modelSide.loading || modelBack.loading || modelFull.loading || coordShot.loading || detailTexture.loading;
+
   useEffect(() => {
     const authorized = sessionStorage.getItem('is_authorized');
     if (authorized) setIsAuthorized(true);
@@ -184,10 +186,25 @@ export default function App() {
     return null;
   };
 
-  const getBaseModelPrompt = () => {
+  const getBaseModelPrompt = (hasBg: boolean = false) => {
     const genderText = modelGender === 'unisex' ? 'UNISEX/ANDROGYNOUS' : modelGender === 'male' ? 'MALE' : 'FEMALE';
     const fashionText = modelGender === 'unisex' ? 'UNISEX' : modelGender === 'male' ? 'MENSWEAR' : 'WOMENSWEAR';
-    return `A professional Korean ${genderText} fashion model (young 20s, tall, perfect proportions) wearing this exact clothing item. The clothing should have a ${modelFit} fit. The model's face must NOT be visible (cropped strictly below the chin/jaw). Styling must be incredibly sophisticated, ${modelStyle.toLowerCase()}, minimalist, and high-end modern Korean ${fashionText} fashion. Avoid any tacky or outdated styling. Strictly NO necklaces, NO jewelry, NO accessories on the neck. Elegant, trendy, and highly fashionable ${fashionText.toLowerCase()} coordination. Luxurious cream-colored, simple hotel-like wall background. Natural posing. Cinematic lighting.`;
+    const bgText = hasBg ? "" : "Luxurious cream-colored, simple hotel-like wall background. ";
+    return `A professional Korean ${genderText} fashion model (young 20s, tall, perfect proportions) wearing this exact clothing item. The clothing should have a ${modelFit} fit. The model's face must NOT be visible (cropped strictly below the chin/jaw). Styling must be incredibly sophisticated, ${modelStyle.toLowerCase()}, minimalist, and high-end modern Korean ${fashionText} fashion. Avoid any tacky or outdated styling. Strictly NO necklaces, NO jewelry, NO accessories on the neck. Elegant, trendy, and highly fashionable ${fashionText.toLowerCase()} coordination. ${bgText}Natural posing. Cinematic lighting.`;
+  };
+
+  const getModelShotPartsAndPrompt = async (sourcePart: any, viewText: string) => {
+    const parts: any[] = [sourcePart];
+    let prompt = `${getBaseModelPrompt(!!bgFile)} ${viewText} EXTREME CLOSE-UP PRODUCT SHOT. Tightly cropped on the clothing item itself. CRITICAL: Do NOT generate a full-body shot. Zoom in closely on the garment to show the fit and fabric details. This must be a tightly cropped product shot, NOT a full-body portrait.`;
+    
+    if (bgFile) {
+      const bgPart = await fileToGenerativePart(bgFile);
+      parts.push(bgPart);
+      prompt = `Image 1 is the clothing item. Image 2 is the background environment. Generate a model shot wearing the clothing from Image 1, placed naturally in the environment from Image 2. ${prompt}`;
+    }
+    
+    parts.push({ text: prompt });
+    return parts;
   };
 
   const regenerateCleanUpFront = async () => {
@@ -221,19 +238,22 @@ export default function App() {
   const regenerateModelFront = async () => {
     if (!frontFile) return;
     const sourceFrontPart = await getSourceFrontPart();
-    await generateImageFromParts([sourceFrontPart, { text: `${getBaseModelPrompt()} Front view. EXTREME CLOSE-UP PRODUCT SHOT. Tightly cropped on the clothing item itself. CRITICAL: Do NOT generate a full-body shot. Zoom in closely on the garment to show the fit and fabric details. This must be a tightly cropped product shot, NOT a full-body portrait.` }], setModelFront, "3:4");
+    const parts = await getModelShotPartsAndPrompt(sourceFrontPart, "Front view.");
+    await generateImageFromParts(parts, setModelFront, "3:4");
   };
 
   const regenerateModelSide = async () => {
     if (!frontFile) return;
     const sourceFrontPart = await getSourceFrontPart();
-    await generateImageFromParts([sourceFrontPart, { text: `${getBaseModelPrompt()} Side profile view. EXTREME CLOSE-UP PRODUCT SHOT. Tightly cropped on the clothing item itself. CRITICAL: Do NOT generate a full-body shot. Zoom in closely on the garment from the side to show the fit and fabric details. This must be a tightly cropped product shot, NOT a full-body portrait.` }], setModelSide, "3:4");
+    const parts = await getModelShotPartsAndPrompt(sourceFrontPart, "Side profile view.");
+    await generateImageFromParts(parts, setModelSide, "3:4");
   };
 
   const regenerateModelBack = async () => {
     if (!frontFile) return;
     const sourceBackPart = await getSourceBackPart();
-    await generateImageFromParts([sourceBackPart, { text: `${getBaseModelPrompt()} Back view. EXTREME CLOSE-UP PRODUCT SHOT. Tightly cropped on the clothing item itself from the back. CRITICAL: Do NOT generate a full-body shot. Zoom in closely on the garment from the back to show the fit and fabric details. This must be a tightly cropped product shot, NOT a full-body portrait.` }], setModelBack, "3:4");
+    const parts = await getModelShotPartsAndPrompt(sourceBackPart, "Back view.");
+    await generateImageFromParts(parts, setModelBack, "3:4");
   };
 
   const regenerateDetailTexture = async () => {
@@ -282,7 +302,7 @@ export default function App() {
       fullBodyParts.push(coordPart);
       fullBodyPrompt = `Image 1 is the clothing item. Image 2 is the coordination styling. Generate a full body shot of a professional Korean ${genderText} fashion model wearing the clothing from Image 1. The clothing should have a ${modelFit} fit. The model MUST wear the exact matching bottoms, shoes, and bag shown in the coordination styling (Image 2). The model's face must NOT be visible (cropped below the chin). ${dynamicPoseText} Styling must be incredibly sophisticated, ${modelStyle.toLowerCase()}, minimalist, and high-end modern Korean ${fashionText} fashion. Strictly NO necklaces, NO jewelry. Luxurious cream-colored, simple hotel-like wall background. Cinematic lighting, photorealistic.`;
     } else {
-      fullBodyPrompt = `${getBaseModelPrompt()} Full body shot. ${dynamicPoseText} High-end sophisticated ${fashionText.toLowerCase()} styling with perfectly matching bottoms and shoes.`;
+      fullBodyPrompt = `${getBaseModelPrompt(false)} Full body shot. ${dynamicPoseText} High-end sophisticated ${fashionText.toLowerCase()} styling with perfectly matching bottoms and shoes.`;
     }
     
     fullBodyParts.push({ text: fullBodyPrompt });
@@ -358,16 +378,19 @@ export default function App() {
     const bottomsText = modelGender === 'unisex' ? 'bottoms (like wide-fit slacks or trendy denim)' : modelGender === 'male' ? 'bottoms (like wide-fit slacks or trendy denim)' : 'bottoms (like chic skirts or wide-fit slacks)';
     const shoesText = modelGender === 'unisex' ? 'shoes (like minimalist sneakers, boots, or derbies)' : modelGender === 'male' ? 'shoes (like minimalist sneakers or derbies)' : 'shoes (like minimalist sneakers, boots, or heels)';
 
-    const baseModelPrompt = `A professional Korean ${genderText} fashion model (young 20s, tall, perfect proportions) wearing this exact clothing item. The clothing should have a ${modelFit} fit. The model's face must NOT be visible (cropped strictly below the chin/jaw). Styling must be incredibly sophisticated, ${modelStyle.toLowerCase()}, minimalist, and high-end modern Korean ${fashionText} fashion. Avoid any tacky or outdated styling. Strictly NO necklaces, NO jewelry, NO accessories on the neck. Elegant, trendy, and highly fashionable ${fashionText.toLowerCase()} coordination. Luxurious cream-colored, simple hotel-like wall background. Natural posing. Cinematic lighting.`;
+    const baseModelPrompt = getBaseModelPrompt(false);
 
     // 3. Model Front
-    generateImageFromParts([sourceFrontPart, { text: `${baseModelPrompt} Front view. EXTREME CLOSE-UP PRODUCT SHOT. Tightly cropped on the clothing item itself. CRITICAL: Do NOT generate a full-body shot. Zoom in closely on the garment to show the fit and fabric details. This must be a tightly cropped product shot, NOT a full-body portrait.` }], setModelFront, "3:4");
+    const frontParts = await getModelShotPartsAndPrompt(sourceFrontPart, "Front view.");
+    generateImageFromParts(frontParts, setModelFront, "3:4");
     
     // 4. Model Side
-    generateImageFromParts([sourceFrontPart, { text: `${baseModelPrompt} Side profile view. EXTREME CLOSE-UP PRODUCT SHOT. Tightly cropped on the clothing item itself. CRITICAL: Do NOT generate a full-body shot. Zoom in closely on the garment from the side to show the fit and fabric details. This must be a tightly cropped product shot, NOT a full-body portrait.` }], setModelSide, "3:4");
+    const sideParts = await getModelShotPartsAndPrompt(sourceFrontPart, "Side profile view.");
+    generateImageFromParts(sideParts, setModelSide, "3:4");
     
     // 5. Model Back
-    generateImageFromParts([sourceBackPart, { text: `${baseModelPrompt} Back view. EXTREME CLOSE-UP PRODUCT SHOT. Tightly cropped on the clothing item itself from the back. CRITICAL: Do NOT generate a full-body shot. Zoom in closely on the garment from the back to show the fit and fabric details. This must be a tightly cropped product shot, NOT a full-body portrait.` }], setModelBack, "3:4");
+    const backParts = await getModelShotPartsAndPrompt(sourceBackPart, "Back view.");
+    generateImageFromParts(backParts, setModelBack, "3:4");
 
     // 8. Detail Shot (Fire concurrently)
     if (enableDetailShot) {
@@ -573,7 +596,7 @@ export default function App() {
                 />
               </div>
               
-              {frontFile && !cleanUpFront.loading && !cleanUpFront.image && (
+              {frontFile && (
                 <motion.div 
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -660,13 +683,18 @@ export default function App() {
 
                   <button
                     onClick={generateAll}
-                    className="group relative px-8 py-4 bg-white text-black rounded-full font-medium tracking-wide overflow-hidden"
+                    disabled={isGenerating}
+                    className={`group relative px-8 py-4 bg-white text-black rounded-full font-medium tracking-wide overflow-hidden ${isGenerating ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     <span className="relative z-10 flex items-center gap-2">
-                      <Sparkles className="w-4 h-4" />
-                      Generate All Assets
+                      {isGenerating ? (
+                        <div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+                      ) : (
+                        <Sparkles className="w-4 h-4" />
+                      )}
+                      {isGenerating ? 'Generating...' : (cleanUpFront.image ? 'Regenerate All Assets' : 'Generate All Assets')}
                     </span>
-                    <div className="absolute inset-0 bg-gray-200 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-300" />
+                    {!isGenerating && <div className="absolute inset-0 bg-gray-200 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-300" />}
                   </button>
                 </motion.div>
               )}
