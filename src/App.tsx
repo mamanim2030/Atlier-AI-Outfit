@@ -162,14 +162,14 @@ export default function App() {
 
   const getSourceFrontPart = async () => {
     if (cleanUpFront.image) {
-      return { inlineData: { data: cleanUpFront.image.split(',')[1], mimeType: 'image/png' } };
+      return { inlineData: { data: cleanUpFront.image.split(',')[1], mimeType: 'image/jpeg' } };
     }
     return await fileToGenerativePart(frontFile!);
   };
 
   const getSourceBackPart = async () => {
     if (cleanUpBack.image) {
-      return { inlineData: { data: cleanUpBack.image.split(',')[1], mimeType: 'image/png' } };
+      return { inlineData: { data: cleanUpBack.image.split(',')[1], mimeType: 'image/jpeg' } };
     }
     if (backFile) {
       return await fileToGenerativePart(backFile);
@@ -179,7 +179,7 @@ export default function App() {
 
   const getCoordPart = () => {
     if (coordShot.image) {
-      return { inlineData: { data: coordShot.image.split(',')[1], mimeType: 'image/png' } };
+      return { inlineData: { data: coordShot.image.split(',')[1], mimeType: 'image/jpeg' } };
     }
     return null;
   };
@@ -301,7 +301,7 @@ export default function App() {
 
       const generatedImage = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
       if (generatedImage) {
-        setState({ loading: false, image: `data:image/png;base64,${generatedImage}` });
+        setState({ loading: false, image: `data:image/jpeg;base64,${generatedImage}` });
         return generatedImage;
       } else {
         setState({ loading: false, image: null });
@@ -330,7 +330,7 @@ export default function App() {
     );
 
     const sourceFrontPart = cleanFrontBase64 
-      ? { inlineData: { data: cleanFrontBase64, mimeType: 'image/png' } }
+      ? { inlineData: { data: cleanFrontBase64, mimeType: 'image/jpeg' } }
       : frontPart;
 
     // 2. Clean up Back (if provided)
@@ -349,7 +349,7 @@ export default function App() {
     }
 
     const sourceBackPart = backFile 
-      ? (cleanBackBase64 ? { inlineData: { data: cleanBackBase64, mimeType: 'image/png' } } : await fileToGenerativePart(backFile))
+      ? (cleanBackBase64 ? { inlineData: { data: cleanBackBase64, mimeType: 'image/jpeg' } } : await fileToGenerativePart(backFile))
       : sourceFrontPart;
 
     const genderText = modelGender === 'unisex' ? 'UNISEX/ANDROGYNOUS' : modelGender === 'male' ? 'MALE' : 'FEMALE';
@@ -387,7 +387,7 @@ export default function App() {
     }
 
     // 6. Model Full (Uses Coord Shot as reference)
-    const coordPart = coordBase64 ? { inlineData: { data: coordBase64, mimeType: 'image/png' } } : null;
+    const coordPart = coordBase64 ? { inlineData: { data: coordBase64, mimeType: 'image/jpeg' } } : null;
     const fullBodyParts: any[] = [sourceFrontPart];
     let fullBodyPrompt = "";
     
@@ -684,7 +684,7 @@ export default function App() {
                     image={cleanUpFront.image}
                     loading={cleanUpFront.loading}
                     aspectRatio="square"
-                    onDownload={cleanUpFront.image ? () => downloadImage(cleanUpFront.image!, 'cleanup-front.png') : undefined}
+                    onDownload={cleanUpFront.image ? () => downloadImage(cleanUpFront.image!, 'cleanup-front.jpg') : undefined}
                     onRegenerate={regenerateCleanUpFront}
                   />
                   {(cleanUpBack.loading || cleanUpBack.image) && (
@@ -694,7 +694,7 @@ export default function App() {
                       image={cleanUpBack.image}
                       loading={cleanUpBack.loading}
                       aspectRatio="square"
-                      onDownload={cleanUpBack.image ? () => downloadImage(cleanUpBack.image!, 'cleanup-back.png') : undefined}
+                      onDownload={cleanUpBack.image ? () => downloadImage(cleanUpBack.image!, 'cleanup-back.jpg') : undefined}
                       onRegenerate={regenerateCleanUpBack}
                     />
                   )}
@@ -710,7 +710,7 @@ export default function App() {
                     image={modelFront.image}
                     loading={modelFront.loading}
                     aspectRatio="portrait"
-                    onDownload={modelFront.image ? () => downloadImage(modelFront.image!, 'model-front.png') : undefined}
+                    onDownload={modelFront.image ? () => downloadImage(modelFront.image!, 'model-front.jpg') : undefined}
                     onRegenerate={regenerateModelFront}
                   />
                   <GeneratedImage
@@ -719,7 +719,7 @@ export default function App() {
                     image={modelSide.image}
                     loading={modelSide.loading}
                     aspectRatio="portrait"
-                    onDownload={modelSide.image ? () => downloadImage(modelSide.image!, 'model-side.png') : undefined}
+                    onDownload={modelSide.image ? () => downloadImage(modelSide.image!, 'model-side.jpg') : undefined}
                     onRegenerate={regenerateModelSide}
                   />
                   <GeneratedImage
@@ -728,7 +728,7 @@ export default function App() {
                     image={modelBack.image}
                     loading={modelBack.loading}
                     aspectRatio="portrait"
-                    onDownload={modelBack.image ? () => downloadImage(modelBack.image!, 'model-back.png') : undefined}
+                    onDownload={modelBack.image ? () => downloadImage(modelBack.image!, 'model-back.jpg') : undefined}
                     onRegenerate={regenerateModelBack}
                   />
                   <GeneratedImage
@@ -737,7 +737,7 @@ export default function App() {
                     image={modelFull.image}
                     loading={modelFull.loading}
                     aspectRatio="portrait"
-                    onDownload={modelFull.image ? () => downloadImage(modelFull.image!, 'model-full.png') : undefined}
+                    onDownload={modelFull.image ? () => downloadImage(modelFull.image!, 'model-full.jpg') : undefined}
                     onRegenerate={regenerateModelFull}
                   />
                 </div>
@@ -754,7 +754,7 @@ export default function App() {
                         image={coordShot.image}
                         loading={coordShot.loading}
                         aspectRatio="square"
-                        onDownload={coordShot.image ? () => downloadImage(coordShot.image!, 'coord-shot.png') : undefined}
+                        onDownload={coordShot.image ? () => downloadImage(coordShot.image!, 'coord-shot.jpg') : undefined}
                         onRegenerate={regenerateCoordShot}
                       />
                     )}
@@ -765,7 +765,7 @@ export default function App() {
                         image={detailTexture.image}
                         loading={detailTexture.loading}
                         aspectRatio="square"
-                        onDownload={detailTexture.image ? () => downloadImage(detailTexture.image!, 'detail-texture.png') : undefined}
+                        onDownload={detailTexture.image ? () => downloadImage(detailTexture.image!, 'detail-texture.jpg') : undefined}
                         onRegenerate={regenerateDetailTexture}
                       />
                     )}
