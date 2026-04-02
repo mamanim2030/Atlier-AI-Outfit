@@ -195,12 +195,12 @@ export default function App() {
 
   const getModelShotPartsAndPrompt = async (sourcePart: any, viewText: string) => {
     const parts: any[] = [sourcePart];
-    let prompt = `${getBaseModelPrompt(!!bgFile)} ${viewText} EXTREME CLOSE-UP PRODUCT SHOT. Tightly cropped on the clothing item itself. CRITICAL: Do NOT generate a full-body shot. Zoom in closely on the garment to show the fit and fabric details. This must be a tightly cropped product shot, NOT a full-body portrait.`;
+    let prompt = `${getBaseModelPrompt(!!bgFile)} ${viewText} MEDIUM CLOSE-UP PRODUCT SHOT. Show the clothing item clearly on the torso/upper body with a little breathing room around the garment. CRITICAL: Do NOT generate a full-body shot, but avoid extreme macro cropping. Show the fit and drape naturally. This must be a medium-cropped product shot (half-body).`;
     
     if (bgFile) {
       const bgPart = await fileToGenerativePart(bgFile);
       parts.push(bgPart);
-      prompt = `Image 1 is the clothing item. Image 2 is the background environment. Generate a model shot wearing the clothing from Image 1, placed naturally in the environment from Image 2. ${prompt}`;
+      prompt = `Image 1 is the clothing item. Image 2 is the background environment. Generate a model shot wearing the clothing from Image 1. CRITICAL FOR REALISM: Since this is a medium close-up shot, do NOT use the entire background from Image 2 as a flat backdrop. Instead, zoom into a relevant portion of the background to match the medium-shot perspective and apply a shallow depth of field (bokeh/blur) to the environment. It must look like a real photograph taken in that location with a portrait lens, seamlessly integrating the model into the environment. ${prompt}`;
     }
     
     parts.push({ text: prompt });
