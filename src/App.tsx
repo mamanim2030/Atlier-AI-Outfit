@@ -4,8 +4,9 @@ import { ImageUpload } from './components/ImageUpload';
 import { GeneratedImage } from './components/GeneratedImage';
 import { AccessGate } from './components/AccessGate';
 import { Chatbot } from './components/Chatbot';
+import { InstructionsModal } from './components/InstructionsModal';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles, Lock, Settings, Key, X, Save } from 'lucide-react';
+import { Sparkles, Lock, Settings, Key, X, Save, HelpCircle } from 'lucide-react';
 
 type GenerationState = {
   loading: boolean;
@@ -28,8 +29,13 @@ export default function App() {
 
   const [bgFile, setBgFile] = useState<File | null>(null);
   const [bgPreview, setBgPreview] = useState<string | null>(null);
+
+  const [referenceFile, setReferenceFile] = useState<File | null>(null);
+  const [referencePreview, setReferencePreview] = useState<string | null>(null);
   
   const [modelGender, setModelGender] = useState<'female' | 'male' | 'unisex'>('female');
+  const [itemCategory, setItemCategory] = useState<'top' | 'bottom' | 'outerwear' | 'dress'>('top');
+  const [itemSeason, setItemSeason] = useState<'Spring' | 'Summer' | 'Autumn/Fall' | 'Winter'>('Spring');
   const [modelFit, setModelFit] = useState<'overfit' | 'regular' | 'slim'>('regular');
   const [modelStyle, setModelStyle] = useState<'Casual' | 'Classic' | 'Streetwear' | 'Business casual' | 'Chic' | 'Preppy' | 'Athleisure'>('Classic');
   const [enableDetailShot, setEnableDetailShot] = useState(false);
@@ -45,6 +51,8 @@ export default function App() {
   
   const [coordShot, setCoordShot] = useState<GenerationState>({ loading: false, image: null });
   const [detailTexture, setDetailTexture] = useState<GenerationState>({ loading: false, image: null });
+
+  const [showInstructions, setShowInstructions] = useState(false);
 
   const isGenerating = cleanUpFront.loading || cleanUpBack.loading || modelFront.loading || modelSide.loading || modelBack.loading || modelFull.loading || coordShot.loading || detailTexture.loading;
 
@@ -138,6 +146,14 @@ export default function App() {
     reader.readAsDataURL(file);
   };
 
+  const handleReferenceSelect = (file: File) => {
+    setReferenceFile(file);
+    const reader = new FileReader();
+    reader.onload = (e) => setReferencePreview(e.target?.result as string);
+    reader.readAsDataURL(file);
+    resetStates();
+  };
+
   const resetStates = () => {
     setCleanUpFront({ loading: false, image: null });
     setCleanUpBack({ loading: false, image: null });
@@ -190,21 +206,75 @@ export default function App() {
     const genderText = modelGender === 'unisex' ? 'UNISEX/ANDROGYNOUS' : modelGender === 'male' ? 'MALE' : 'FEMALE';
     const fashionText = modelGender === 'unisex' ? 'UNISEX' : modelGender === 'male' ? 'MENSWEAR' : 'WOMENSWEAR';
     const bgText = hasBg ? "" : "Luxurious cream-colored, simple hotel-like wall background. ";
-    return `A professional Korean ${genderText} fashion model (young 20s, tall, perfect proportions) wearing this exact clothing item. The clothing should have a ${modelFit} fit. The model's face must NOT be visible (cropped strictly below the chin/jaw). Styling must be incredibly sophisticated, ${modelStyle.toLowerCase()}, minimalist, and high-end modern Korean ${fashionText} fashion. Avoid any tacky or outdated styling. Strictly NO necklaces, NO jewelry, NO accessories on the neck. Elegant, trendy, and highly fashionable ${fashionText.toLowerCase()} coordination. ${bgText}Natural posing. Cinematic lighting.`;
+    const itemNoun = itemCategory === 'accessory' ? 'accessory' : 'clothing item';
+    const fitText = itemCategory === 'accessory' ? '' : `The clothing should have a ${modelFit} fit. `;
+    const wearingText = itemCategory === 'accessory' ? 'NATURALLY WEARING this exact accessory as part of an outfit' : `wearing this exact ${itemNoun}`;
+    return `A professional Korean ${genderText} fashion model (young 20s, tall, perfect proportions) ${wearingText}. ${fitText}The model's face must NOT be visible (cropped strictly below the chin/jaw). Styling must be incredibly sophisticated ${itemSeason} season attire, ${modelStyle.toLowerCase()}, minimalist, and high-end modern Korean ${fashionText} fashion. Avoid any tacky or outdated styling. Strictly NO necklaces, NO jewelry, NO accessories on the neck. Elegant, trendy, and highly fashionable ${itemSeason} ${fashionText.toLowerCase()} coordination. ${bgText}Natural posing. Cinematic lighting.`;
   };
 
   const getModelShotPartsAndPrompt = async (sourcePart: any, viewText: string) => {
     const parts: any[] = [sourcePart];
-    let prompt = `${getBaseModelPrompt(!!bgFile)} ${viewText} MEDIUM CLOSE-UP PRODUCT SHOT. Show the clothing item clearly on the torso/upper body with a little breathing room around the garment. CRITICAL: Do NOT generate a full-body shot, but avoid extreme macro cropping. Show the fit and drape naturally. This must be a medium-cropped product shot (half-body).`;
+    
+    let cameraText = "MEDIUM CLOSE-UP PRODUCT SHOT. Show the clothing item clearly on the torso/upper body with a little breathing room around the garment. CRITICAL: Do NOT generate a full-body shot, but avoid extreme macro cropping. Show the fit and drape naturally. This must be a medium-cropped product shot (half-body).";
+    if (itemCategory === 'bottom') {
+      cameraText = "FULL LEGS & SHOES SHOT. Ensure the framing captures from the waist down to the shoes. CRITICAL: The model's shoes MUST be fully visible. Do not cut off the image at the knees or calves. This must show the full length of the pants/bottoms and the footwear completely.";
+    } else if (itemCategory === 'dress' || itemCategory === 'outerwear') {
+      cameraText = "MEDIUM-LONG SHOT. Show the clothing item clearly. Ensure enough of the body is visible to show the full drape and length of the garment.";
+    } else if (itemCategory === 'accessory') {
+      cameraText = "NATURAL EXPRESSIVE PORTRAIT / BODY SHOT. Tightly framed yet showing context. The model must be NATURALLY WEARING or HOLDING the accessory. CRITICAL ANALYSIS REQUIRED: Carefully analyze the accessory in Image 1. You MUST NOT add any straps, handles, chains, or parts that do not exist in the source image. If it is a bag without a shoulder strap, the model MUST hold it in their hands or clutch it under their arm. The accessory must be clearly visible and the focal point, seamlessly integrated into a beautiful stylish outfit.";
+    }
+
+    let prompt = `${getBaseModelPrompt(!!bgFile)} ${viewText} ${cameraText}`;
     
     if (bgFile) {
       const bgPart = await fileToGenerativePart(bgFile);
       parts.push(bgPart);
-      prompt = `Image 1 is the clothing item. Image 2 is the background environment. Generate a model shot wearing the clothing from Image 1. CRITICAL FOR REALISM: Since this is a medium close-up shot, do NOT use the entire background from Image 2 as a flat backdrop. Instead, zoom into a relevant portion of the background to match the medium-shot perspective and apply a shallow depth of field (bokeh/blur) to the environment. It must look like a real photograph taken in that location with a portrait lens, seamlessly integrating the model into the environment. ${prompt}`;
+      const bgIndex = parts.length;
+      
+      const framingText = itemCategory === 'bottom' ? "waist-to-shoes perspective" : itemCategory === 'accessory' ? "close-up accessory perspective" : "medium close-up shot";
+      prompt = `Image 1 is the item. Image ${bgIndex} is the background environment. Generate a model shot showing the item from Image 1. CRITICAL FOR REALISM: Since this is a ${framingText}, do NOT use the entire background from Image ${bgIndex} as a flat backdrop. Instead, zoom into a relevant portion of the background to match the perspective and apply a shallow depth of field (bokeh/blur) to the environment. It must look like a real photograph taken in that location with a portrait lens, seamlessly integrating the model into the environment. CRUX: DO NOT alter the design, shape, or parts of the item in Image 1. ${prompt}`;
+    } else {
+      prompt = `${prompt} CRITICAL: DO NOT alter the design, shape, or parts of the item in Image 1.`;
+    }
+
+    if (referenceFile) {
+      const refPart = await fileToGenerativePart(referenceFile);
+      parts.push(refPart);
+      const refIndex = parts.length;
+      prompt = `Image ${refIndex} is a reference photo indicating the physical size, scale, and general wearing style of the item in Image 1. You MUST use Image ${refIndex} to accurately estimate the dimensions and how the accessory is held or worn, and mirror that scale and style in your generated image. ${prompt}`;
     }
     
     parts.push({ text: prompt });
     return parts;
+  };
+
+  const getFullBodyPromptStr = (hasBg: boolean, hasCoord: boolean, hasReference: boolean) => {
+    const genderText = modelGender === 'unisex' ? 'UNISEX/ANDROGYNOUS' : modelGender === 'male' ? 'MALE' : 'FEMALE';
+    const fashionText = modelGender === 'unisex' ? 'UNISEX' : modelGender === 'male' ? 'MENSWEAR' : 'WOMENSWEAR';
+    
+    const dynamicPoseText = itemCategory === 'accessory' ? "The model should pose naturally while WEARING or HOLDING the accessory. CRITICAL: Carefully analyze the accessory in Image 1 to determine how it should be held. Do NOT add a strap if there isn't one; hold it in the hand instead. Make it the clear focal point of the shot without looking awkward." : "The model should have a dynamic, engaged stance with a slight turn to effectively showcase the clothing's fit, drape, and silhouette. Natural but confident posing.";
+    const itemNoun = itemCategory === 'accessory' ? 'accessory' : 'clothing item';
+    const fitText = itemCategory === 'accessory' ? '' : `The clothing should have a ${modelFit} fit. `;
+    const wearingAction = itemCategory === 'accessory' ? 'NATURALLY WEARING/HOLDING the accessory' : 'wearing the item';
+
+    const baseConstraintText = itemCategory === 'accessory' ? "CRITICAL: DO NOT alter the design, shape, or parts of the accessory in Image 1. DO NOT add straps, handles, or chains that do not exist." : "";
+    
+    let basePrompt = "";
+    
+    if (hasBg && hasCoord) {
+      basePrompt = `Image 1 is the ${itemNoun}. Image 2 is the background environment. Image 3 is the coordination styling. Generate a full body shot of a professional Korean ${genderText} fashion model ${wearingAction} from Image 1, placed naturally in the environment from Image 2. ${baseConstraintText} ${fitText}The model MUST wear the exact matching bottoms, shoes, and bag shown in the coordination styling (Image 3). The model's face must NOT be visible (cropped below the chin). ${dynamicPoseText} Styling must be incredibly sophisticated, ${modelStyle.toLowerCase()}, minimalist, and high-end modern Korean ${fashionText} fashion. Strictly NO necklaces, NO jewelry. Cinematic lighting, photorealistic.`;
+    } else if (hasBg) {
+      basePrompt = `Image 1 is the ${itemNoun}. Image 2 is the background environment. Generate a full body shot of a professional Korean ${genderText} fashion model ${wearingAction} from Image 1, placed naturally in the environment from Image 2. ${baseConstraintText} ${fitText}The model's face must NOT be visible (cropped below the chin). ${dynamicPoseText} Styling must be incredibly sophisticated, ${modelStyle.toLowerCase()}, minimalist, and high-end modern Korean ${fashionText} fashion with perfectly matching bottoms and shoes. Strictly NO necklaces, NO jewelry. Cinematic lighting, photorealistic.`;
+    } else if (hasCoord) {
+      basePrompt = `Image 1 is the ${itemNoun}. Image 2 is the coordination styling. Generate a full body shot of a professional Korean ${genderText} fashion model ${wearingAction} from Image 1. ${baseConstraintText} ${fitText}The model MUST wear the exact matching bottoms, shoes, and bag shown in the coordination styling (Image 2). The model's face must NOT be visible (cropped below the chin). ${dynamicPoseText} Styling must be incredibly sophisticated, ${modelStyle.toLowerCase()}, minimalist, and high-end modern Korean ${fashionText} fashion. Strictly NO necklaces, NO jewelry. Luxurious cream-colored, simple hotel-like wall background. Cinematic lighting, photorealistic.`;
+    } else {
+      basePrompt = `${getBaseModelPrompt(false)} Full body shot. ${baseConstraintText} ${dynamicPoseText} High-end sophisticated ${fashionText.toLowerCase()} styling with perfectly matching bottoms and shoes.`;
+    }
+
+    if (hasReference) {
+      return basePrompt + ` The FINAL Image passed to you is a reference photo indicating the physical size, scale, and general wearing style of the item in Image 1. You MUST use this reference image to accurately estimate the dimensions and how the accessory is held or worn, and mirror that scale and style in your generated image. DO NOT alter the item's details.`;
+    }
+    return basePrompt;
   };
 
   const regenerateCleanUpFront = async () => {
@@ -272,9 +342,10 @@ export default function App() {
     const fashionText = modelGender === 'unisex' ? 'UNISEX' : modelGender === 'male' ? 'MENSWEAR' : 'WOMENSWEAR';
     const bottomsText = modelGender === 'unisex' ? 'bottoms (like wide-fit slacks or trendy denim)' : modelGender === 'male' ? 'bottoms (like wide-fit slacks or trendy denim)' : 'bottoms (like chic skirts or wide-fit slacks)';
     const shoesText = modelGender === 'unisex' ? 'shoes (like minimalist sneakers, boots, or derbies)' : modelGender === 'male' ? 'shoes (like minimalist sneakers or derbies)' : 'shoes (like minimalist sneakers, boots, or heels)';
+    const itemNoun = itemCategory === 'accessory' ? 'accessory/item' : 'clothing item';
     await generateImageFromParts([
       frontPart,
-      { text: `A stylish flat lay or aesthetic outfit grid featuring this exact clothing item, paired with high-end, minimalist matching ${bottomsText}, ${shoesText}, and a bag suitable for a sophisticated young Korean 20s ${demographicText} demographic. The styling should reflect a ${modelStyle.toLowerCase()} aesthetic. Strictly NO necklaces, NO jewelry. Avoid any tacky or outdated styling. Luxurious cream-colored background. High-end designer ${fashionText.toLowerCase()} e-commerce styling.` }
+      { text: `A stylish ${itemSeason} season flat lay or aesthetic outfit grid featuring this exact ${itemNoun}, paired with high-end, minimalist matching ${itemSeason} ${bottomsText}, ${shoesText}, and a bag suitable for a sophisticated young Korean 20s ${demographicText} demographic. The styling should reflect a ${modelStyle.toLowerCase()} aesthetic. Strictly NO necklaces, NO jewelry. Avoid any tacky or outdated styling. Luxurious cream-colored background. High-end designer ${fashionText.toLowerCase()} e-commerce styling.` }
     ], setCoordShot, "1:1");
   };
 
@@ -282,30 +353,24 @@ export default function App() {
     if (!frontFile) return;
     const sourceFrontPart = await getSourceFrontPart();
     const coordPart = getCoordPart();
-    const genderText = modelGender === 'unisex' ? 'UNISEX/ANDROGYNOUS' : modelGender === 'male' ? 'MALE' : 'FEMALE';
-    const fashionText = modelGender === 'unisex' ? 'UNISEX' : modelGender === 'male' ? 'MENSWEAR' : 'WOMENSWEAR';
     const fullBodyParts: any[] = [sourceFrontPart];
-    let fullBodyPrompt = "";
     
-    const dynamicPoseText = "The model should have a dynamic, engaged stance with a slight turn to effectively showcase the clothing's fit, drape, and silhouette. Natural but confident posing.";
-
     if (bgFile && coordPart) {
       const bgPart = await fileToGenerativePart(bgFile);
       fullBodyParts.push(bgPart);
       fullBodyParts.push(coordPart);
-      fullBodyPrompt = `Image 1 is the clothing item. Image 2 is the background environment. Image 3 is the coordination styling. Generate a full body shot of a professional Korean ${genderText} fashion model wearing the clothing from Image 1, placed naturally in the environment from Image 2. The clothing should have a ${modelFit} fit. The model MUST wear the exact matching bottoms, shoes, and bag shown in the coordination styling (Image 3). The model's face must NOT be visible (cropped below the chin). ${dynamicPoseText} Styling must be incredibly sophisticated, ${modelStyle.toLowerCase()}, minimalist, and high-end modern Korean ${fashionText} fashion. Strictly NO necklaces, NO jewelry. Cinematic lighting, photorealistic.`;
     } else if (bgFile) {
       const bgPart = await fileToGenerativePart(bgFile);
       fullBodyParts.push(bgPart);
-      fullBodyPrompt = `Image 1 is the clothing item. Image 2 is the background environment. Generate a full body shot of a professional Korean ${genderText} fashion model wearing the clothing from Image 1, placed naturally in the environment from Image 2. The clothing should have a ${modelFit} fit. The model's face must NOT be visible (cropped below the chin). ${dynamicPoseText} Styling must be incredibly sophisticated, ${modelStyle.toLowerCase()}, minimalist, and high-end modern Korean ${fashionText} fashion with perfectly matching bottoms and shoes. Strictly NO necklaces, NO jewelry. Cinematic lighting, photorealistic.`;
     } else if (coordPart) {
       fullBodyParts.push(coordPart);
-      fullBodyPrompt = `Image 1 is the clothing item. Image 2 is the coordination styling. Generate a full body shot of a professional Korean ${genderText} fashion model wearing the clothing from Image 1. The clothing should have a ${modelFit} fit. The model MUST wear the exact matching bottoms, shoes, and bag shown in the coordination styling (Image 2). The model's face must NOT be visible (cropped below the chin). ${dynamicPoseText} Styling must be incredibly sophisticated, ${modelStyle.toLowerCase()}, minimalist, and high-end modern Korean ${fashionText} fashion. Strictly NO necklaces, NO jewelry. Luxurious cream-colored, simple hotel-like wall background. Cinematic lighting, photorealistic.`;
-    } else {
-      fullBodyPrompt = `${getBaseModelPrompt(false)} Full body shot. ${dynamicPoseText} High-end sophisticated ${fashionText.toLowerCase()} styling with perfectly matching bottoms and shoes.`;
+    }
+
+    if (referenceFile) {
+      fullBodyParts.push(await fileToGenerativePart(referenceFile));
     }
     
-    fullBodyParts.push({ text: fullBodyPrompt });
+    fullBodyParts.push({ text: getFullBodyPromptStr(!!bgFile, !!coordPart, !!referenceFile) });
     await generateImageFromParts(fullBodyParts, setModelFull, "3:4");
   };
 
@@ -403,36 +468,33 @@ export default function App() {
     // 7. Coord Shot (Await this because Full Body needs it)
     let coordBase64 = null;
     if (enableCoordShot) {
+      const itemNoun = itemCategory === 'accessory' ? 'accessory/item' : 'clothing item';
       coordBase64 = await generateImageFromParts([
         frontPart,
-        { text: `A stylish flat lay or aesthetic outfit grid featuring this exact clothing item, paired with high-end, minimalist matching ${bottomsText}, ${shoesText}, and a bag suitable for a sophisticated young Korean 20s ${demographicText} demographic. The styling should reflect a ${modelStyle.toLowerCase()} aesthetic. Strictly NO necklaces, NO jewelry. Avoid any tacky or outdated styling. Luxurious cream-colored background. High-end designer ${fashionText.toLowerCase()} e-commerce styling.` }
+        { text: `A stylish ${itemSeason} season flat lay or aesthetic outfit grid featuring this exact ${itemNoun}, paired with high-end, minimalist matching ${itemSeason} ${bottomsText}, ${shoesText}, and a bag suitable for a sophisticated young Korean 20s ${demographicText} demographic. The styling should reflect a ${modelStyle.toLowerCase()} aesthetic. Strictly NO necklaces, NO jewelry. Avoid any tacky or outdated styling. Luxurious cream-colored background. High-end designer ${fashionText.toLowerCase()} e-commerce styling.` }
       ], setCoordShot, "1:1");
     }
 
     // 6. Model Full (Uses Coord Shot as reference)
     const coordPart = coordBase64 ? { inlineData: { data: coordBase64, mimeType: 'image/jpeg' } } : null;
     const fullBodyParts: any[] = [sourceFrontPart];
-    let fullBodyPrompt = "";
     
-    const dynamicPoseText = "The model should have a dynamic, engaged stance with a slight turn to effectively showcase the clothing's fit, drape, and silhouette. Natural but confident posing.";
-
     if (bgFile && coordPart) {
       const bgPart = await fileToGenerativePart(bgFile);
       fullBodyParts.push(bgPart);
       fullBodyParts.push(coordPart);
-      fullBodyPrompt = `Image 1 is the clothing item. Image 2 is the background environment. Image 3 is the coordination styling. Generate a full body shot of a professional Korean ${genderText} fashion model wearing the clothing from Image 1, placed naturally in the environment from Image 2. The clothing should have a ${modelFit} fit. The model MUST wear the exact matching bottoms, shoes, and bag shown in the coordination styling (Image 3). The model's face must NOT be visible (cropped below the chin). ${dynamicPoseText} Styling must be incredibly sophisticated, ${modelStyle.toLowerCase()}, minimalist, and high-end modern Korean ${fashionText} fashion. Strictly NO necklaces, NO jewelry. Cinematic lighting, photorealistic.`;
     } else if (bgFile) {
       const bgPart = await fileToGenerativePart(bgFile);
       fullBodyParts.push(bgPart);
-      fullBodyPrompt = `Image 1 is the clothing item. Image 2 is the background environment. Generate a full body shot of a professional Korean ${genderText} fashion model wearing the clothing from Image 1, placed naturally in the environment from Image 2. The clothing should have a ${modelFit} fit. The model's face must NOT be visible (cropped below the chin). ${dynamicPoseText} Styling must be incredibly sophisticated, ${modelStyle.toLowerCase()}, minimalist, and high-end modern Korean ${fashionText} fashion with perfectly matching bottoms and shoes. Strictly NO necklaces, NO jewelry. Cinematic lighting, photorealistic.`;
     } else if (coordPart) {
       fullBodyParts.push(coordPart);
-      fullBodyPrompt = `Image 1 is the clothing item. Image 2 is the coordination styling. Generate a full body shot of a professional Korean ${genderText} fashion model wearing the clothing from Image 1. The clothing should have a ${modelFit} fit. The model MUST wear the exact matching bottoms, shoes, and bag shown in the coordination styling (Image 2). The model's face must NOT be visible (cropped below the chin). ${dynamicPoseText} Styling must be incredibly sophisticated, ${modelStyle.toLowerCase()}, minimalist, and high-end modern Korean ${fashionText} fashion. Strictly NO necklaces, NO jewelry. Luxurious cream-colored, simple hotel-like wall background. Cinematic lighting, photorealistic.`;
-    } else {
-      fullBodyPrompt = `${baseModelPrompt} Full body shot. ${dynamicPoseText} High-end sophisticated ${fashionText.toLowerCase()} styling with perfectly matching bottoms and shoes.`;
+    }
+
+    if (referenceFile) {
+      fullBodyParts.push(await fileToGenerativePart(referenceFile));
     }
     
-    fullBodyParts.push({ text: fullBodyPrompt });
+    fullBodyParts.push({ text: getFullBodyPromptStr(!!bgFile, !!coordPart, !!referenceFile) });
     generateImageFromParts(fullBodyParts, setModelFull, "3:4");
   };
 
@@ -533,7 +595,14 @@ export default function App() {
               Shopping Mall Generator
             </p>
           </div>
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setShowInstructions(true)}
+              className="p-2 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 transition-colors flex items-center gap-2 px-4"
+            >
+              <HelpCircle className="w-5 h-5 text-white/70" />
+              <span className="text-white/70 text-sm font-medium">How to Use</span>
+            </button>
             <button 
               onClick={() => setShowApiKeyModal(true)}
               className="p-2 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
@@ -544,6 +613,8 @@ export default function App() {
           </div>
         </div>
       </header>
+
+      <InstructionsModal isOpen={showInstructions} onClose={() => setShowInstructions(false)} />
 
       {!hasApiKey ? (
         <div className="min-h-[60vh] flex flex-col items-center justify-center p-6 text-center">
@@ -572,20 +643,27 @@ export default function App() {
         <main className="max-w-7xl mx-auto px-6 md:px-12 mt-12">
           <section className="mb-20">
             <div className="flex flex-col items-center">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-5xl">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 w-full max-w-6xl">
                 <ImageUpload 
                   title="Upload Front Item"
-                  subtitle="Required: Front view of clothing"
+                  subtitle="Required: Front view of item"
                   onImageSelect={handleFrontSelect} 
                   selectedImage={frontPreview}
                   onClear={() => { setFrontFile(null); setFrontPreview(null); resetStates(); }}
                 />
                 <ImageUpload 
                   title="Upload Back Item"
-                  subtitle="Optional: Back view of clothing"
+                  subtitle="Optional: Back view of item"
                   onImageSelect={handleBackSelect} 
                   selectedImage={backPreview}
                   onClear={() => { setBackFile(null); setBackPreview(null); resetStates(); }}
+                />
+                <ImageUpload 
+                  title="Upload Reference"
+                  subtitle="Optional: Size & fit reference"
+                  onImageSelect={handleReferenceSelect} 
+                  selectedImage={referencePreview}
+                  onClear={() => { setReferenceFile(null); setReferencePreview(null); resetStates(); }}
                 />
                 <ImageUpload 
                   title="Upload Background"
@@ -626,6 +704,33 @@ export default function App() {
 
                     <div className="flex items-center gap-6 mt-2">
                       <div className="flex items-center gap-4">
+                        <div className="flex flex-col gap-1">
+                          <label className="text-xs text-white/60 ml-1">Type</label>
+                          <select
+                            value={itemCategory}
+                            onChange={(e) => setItemCategory(e.target.value as any)}
+                            className="bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-white/30 cursor-pointer"
+                          >
+                            <option value="top">Top</option>
+                            <option value="bottom">Bottom</option>
+                            <option value="outerwear">Outerwear</option>
+                            <option value="dress">Dress</option>
+                            <option value="accessory">Accessory</option>
+                          </select>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="text-xs text-white/60 ml-1">Season</label>
+                          <select
+                            value={itemSeason}
+                            onChange={(e) => setItemSeason(e.target.value as any)}
+                            className="bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-white/30 cursor-pointer"
+                          >
+                            <option value="Spring">Spring</option>
+                            <option value="Summer">Summer</option>
+                            <option value="Autumn/Fall">Autumn/Fall</option>
+                            <option value="Winter">Winter</option>
+                          </select>
+                        </div>
                         <div className="flex flex-col gap-1">
                           <label className="text-xs text-white/60 ml-1">Fit</label>
                           <select
